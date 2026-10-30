@@ -1,0 +1,512 @@
+{
+  "name": "IT Sec Briefing",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        160
+      ],
+      "id": "071c2ed4-8315-4215-9819-613386acf10d",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "hzz0T2mON21s9MrQ",
+          "mode": "list",
+          "cachedResultName": "security_assets",
+          "cachedResultUrl": "/projects/COq2CyrS8Ovl9Uuv/datatables/hzz0T2mON21s9MrQ"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "active",
+              "condition": "isTrue"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -80,
+        -16
+      ],
+      "id": "5b7a33ce-b30f-4e48-a84c-3ad517fffc33",
+      "name": "Get row(s)"
+    },
+    {
+      "parameters": {
+        "url": "=https://internetdb.shodan.io/{{$json.ip}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        144,
+        -176
+      ],
+      "id": "9f4ef673-b771-4852-bd3a-f725e0bc3b52",
+      "name": "HTTP Request",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        368,
+        -32
+      ],
+      "id": "202fbf6a-572c-4691-b652-3848c38631b0",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const data = item.json;\n\n  // Erwartete Ports aus der Data Table\n  const expected = (data.expected_ports || '')\n    .split(',')\n    .map(p => Number(p.trim()))\n    .filter(p => p > 0);\n\n  // Tatsächlich von Shodan erkannte Ports\n  const observed = data.ports || [];\n\n  // Vergleich\n  const missing = expected.filter(p => !observed.includes(p));\n  const unexpected = observed.filter(p => !expected.includes(p));\n\n  return {\n    json: {\n      name: data.name,\n      ip: data.ip,\n      environment: data.environment,\n\n      expected_ports: expected,\n      observed_ports: observed,\n\n      missing_ports: missing,\n      unexpected_ports: unexpected,\n\n      vulnerabilities: data.vulns || [],\n\n      security_status:\n        unexpected.length > 0 ? 'WARNING' :\n        missing.length > 0 ? 'NOTICE' :\n        'OK'\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        -32
+      ],
+      "id": "677ec611-47a9-4b90-b076-9adc4263fc59",
+      "name": "Analyze Security"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  return {\n    json: {\n      ...item.json,\n      vulns: [\n        \"CVE-2021-44228\",\n        \"CVE-2023-34362\"\n      ]\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        -32
+      ],
+      "id": "44835677-0bcb-4ad3-9f14-48d56f892574",
+      "name": "Test_CVE",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfor (const item of $input.all()) {\n  const data = item.json;\n\n  for (const cve of data.vulnerabilities || []) {\n    results.push({\n      json: {\n        name: data.name,\n        ip: data.ip,\n        environment: data.environment,\n        cve: cve,\n        test_mode: true\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        -32
+      ],
+      "id": "2df78dd7-260a-49d6-ab33-611964766209",
+      "name": "Split CVEs"
+    },
+    {
+      "parameters": {
+        "url": "=https://cvedb.shodan.io/cve/{{$json.cve}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1248,
+        -192
+      ],
+      "id": "c219d0af-d2ba-4c70-a219-cf00cb0f1b39",
+      "name": "Check CVEs"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1472,
+        -48
+      ],
+      "id": "b60cb3cf-61e8-4382-8e14-63dbd40112ed",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const d = item.json;\n\n  const cvss = Number(d.cvss_v3 ?? d.cvss ?? 0);\n  const epss = Number(d.epss ?? 0);\n  const kev = d.kev === true;\n\n  let risk = 'LOW';\n\n  if (kev || cvss >= 9) {\n    risk = 'CRITICAL';\n  } else if (cvss >= 7) {\n    risk = 'HIGH';\n  } else if (cvss >= 4) {\n    risk = 'MEDIUM';\n  }\n\n  return {\n    json: {\n      asset: d.name,\n      ip: d.ip,\n      environment: d.environment,\n      cve: d.cve_id,\n      description: d.summary,\n      cvss,\n      epss,\n      kev,\n      risk,\n      ransomware: d.ransomware_campaign || null,\n      test_mode: d.test_mode === true\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        -48
+      ],
+      "id": "6479f6c5-bf08-4873-8d62-20ae3ad08f5e",
+      "name": "CVE Risk Management"
+    },
+    {
+      "parameters": {
+        "jsCode": "const grouped = {};\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  const key = d.ip;\n\n  if (!grouped[key]) {\n    grouped[key] = {\n      name: d.asset,\n      ip: d.ip,\n      environment: d.environment,\n      vulnerabilities: []\n    };\n  }\n\n  grouped[key].vulnerabilities.push({\n    cve: d.cve,\n    cvss: d.cvss,\n    epss: d.epss,\n    kev: d.kev,\n    risk: d.risk,\n    description: d.description,\n    ransomware: d.ransomware\n  });\n}\n\nreturn Object.values(grouped).map(item => ({\n  json: item\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -48
+      ],
+      "id": "9edbfd5f-deac-41ff-a4b8-32253d840d28",
+      "name": "Aggregate CVE Findings"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "ip",
+              "field2": "ip"
+            }
+          ]
+        },
+        "joinMode": "enrichInput2",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2176,
+        48
+      ],
+      "id": "e6176dcf-370d-42a2-9e88-6078fd76d4e5",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const d = item.json;\n\n  const vulns = d.vulnerabilities || [];\n\n  const critical = vulns.filter(v => v.risk === 'CRITICAL').length;\n  const high = vulns.filter(v => v.risk === 'HIGH').length;\n  const medium = vulns.filter(v => v.risk === 'MEDIUM').length;\n\n  const unexpectedPorts = d.unexpected_ports || [];\n\n  let risk = 'LOW';\n\n  if (critical > 0) {\n    risk = 'CRITICAL';\n  } else if (high > 0 || unexpectedPorts.length > 0) {\n    risk = 'HIGH';\n  } else if (medium > 0 || (d.missing_ports || []).length > 0) {\n    risk = 'MEDIUM';\n  }\n\n  return {\n    json: {\n      ...d,\n      risk_summary: {\n        overall: risk,\n        critical_cves: critical,\n        high_cves: high,\n        medium_cves: medium,\n        unexpected_ports: unexpectedPorts.length\n      }\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        48
+      ],
+      "id": "0cd3ccc3-3862-4e1e-b0eb-32028376928b",
+      "name": "Calculate Asset Risk"
+    },
+    {
+      "parameters": {
+        "jsCode": "const assets = $input.all().map(i => i.json);\n\nconst critical = assets.filter(a => a.risk_summary?.overall === 'CRITICAL');\nconst high = assets.filter(a => a.risk_summary?.overall === 'HIGH');\nconst medium = assets.filter(a => a.risk_summary?.overall === 'MEDIUM');\nconst low = assets.filter(a => a.risk_summary?.overall === 'LOW');\n\nconst colors = {\n  CRITICAL: '#dc2626',\n  HIGH: '#ea580c',\n  MEDIUM: '#ca8a04',\n  LOW: '#16a34a'\n};\n\nconst esc = value => String(value ?? '')\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;')\n  .replace(/\"/g, '&quot;');\n\nconst assetRows = assets.map(a => {\n  const risk = a.risk_summary?.overall || 'UNKNOWN';\n  const vulns = a.vulnerabilities || [];\n\n  return `\n    <tr>\n      <td>${esc(a.name)}</td>\n      <td>${esc(a.ip)}</td>\n      <td>${esc(a.environment)}</td>\n      <td style=\"color:${colors[risk] || '#64748b'};font-weight:bold\">\n        ${esc(risk)}\n      </td>\n      <td>${(a.unexpected_ports || []).join(', ') || 'Keine'}</td>\n      <td>${vulns.length}</td>\n    </tr>`;\n}).join('');\n\nconst findings = assets.flatMap(a =>\n  (a.vulnerabilities || []).map(v => `\n    <tr>\n      <td>${esc(a.name)}</td>\n      <td>${esc(v.cve)}</td>\n      <td>${esc(v.cvss)}</td>\n      <td>${esc(v.epss)}</td>\n      <td>${v.kev ? 'JA' : 'Nein'}</td>\n      <td style=\"color:${colors[v.risk] || '#64748b'}\">\n        <b>${esc(v.risk)}</b>\n      </td>\n    </tr>\n  `)\n).join('');\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n</head>\n<body style=\"font-family:Arial,sans-serif;color:#1f2937;background:#f3f4f6;padding:20px\">\n<div style=\"max-width:900px;margin:auto;background:white;padding:25px\">\n\n<h1>IT Security Briefing</h1>\n<p>Automatisierter Sicherheitsbericht auf Basis von Shodan.</p>\n\n<h2>Zusammenfassung</h2>\n\n<table width=\"100%\" cellpadding=\"12\" style=\"text-align:center\">\n<tr>\n<td style=\"background:#fee2e2\">\n<b>${critical.length}</b><br>Critical\n</td>\n<td style=\"background:#ffedd5\">\n<b>${high.length}</b><br>High\n</td>\n<td style=\"background:#fef9c3\">\n<b>${medium.length}</b><br>Medium\n</td>\n<td style=\"background:#dcfce7\">\n<b>${low.length}</b><br>Low\n</td>\n</tr>\n</table>\n\n<h2>Asset-Übersicht</h2>\n<table width=\"100%\" cellpadding=\"8\" cellspacing=\"0\" border=\"1\"\nstyle=\"border-collapse:collapse;font-size:13px\">\n<tr style=\"background:#e5e7eb\">\n<th>Asset</th><th>IP</th><th>Umgebung</th>\n<th>Risiko</th><th>Unerwartete Ports</th><th>CVEs</th>\n</tr>\n${assetRows}\n</table>\n\n<h2>Gefundene Schwachstellen</h2>\n<table width=\"100%\" cellpadding=\"8\" cellspacing=\"0\" border=\"1\"\nstyle=\"border-collapse:collapse;font-size:13px\">\n<tr style=\"background:#e5e7eb\">\n<th>Asset</th><th>CVE</th><th>CVSS</th>\n<th>EPSS</th><th>KEV</th><th>Risiko</th>\n</tr>\n${findings || '<tr><td colspan=\"6\">Keine CVEs gefunden</td></tr>'}\n</table>\n\n<p style=\"color:#64748b;font-size:11px;margin-top:30px\">\nQuelle: Shodan InternetDB und Shodan CVEDB.<br>\nShodan-Ergebnisse sind Hinweise und keine abschließende Bestätigung\neiner tatsächlichen Verwundbarkeit.\n</p>\n\n</div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    subject: `IT Security Briefing – ${critical.length} kritische Assets`,\n    html,\n    total_assets: assets.length,\n    critical: critical.length,\n    high: high.length,\n    medium: medium.length,\n    low: low.length\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2624,
+        48
+      ],
+      "id": "2d6f7491-9453-489f-95dc-c2af21d42590",
+      "name": "Generate HTML Report"
+    },
+    {
+      "parameters": {
+        "fromEmail": "cve@phil27.de",
+        "toEmail": "philipdittmar@t-online.de",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2928,
+        48
+      ],
+      "id": "70e1fc20-5680-429b-a83f-75c6e8f8c4ed",
+      "name": "Send an Email",
+      "webhookId": "8e0532a6-183b-42bf-be24-da29458981f6",
+      "credentials": {
+        "smtp": {
+          "id": "PTT0Q0efPdiLeARV",
+          "name": "phil27.de-smtp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -368,
+        -16
+      ],
+      "id": "c8de6212-bd24-42de-acda-ee7f899d9bf0",
+      "name": "Schedule Trigger",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        2496,
+        240
+      ],
+      "id": "9c1085fb-9b1e-4db0-8c66-e153b7aa7358",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const error = $input.first().json;\n\nconst workflow = error.workflow || {};\nconst execution = error.execution || {};\nconst details = error.execution?.error || error.error || {};\n\nconst esc = value => String(value ?? 'Unbekannt')\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;')\n  .replace(/\"/g, '&quot;');\n\nconst workflowName = workflow.name || 'Unbekannter Workflow';\nconst workflowId = workflow.id || 'Unbekannt';\nconst executionId = execution.id || 'Unbekannt';\nconst errorMessage = details.message || 'Keine Fehlerbeschreibung verfügbar';\nconst errorNode = details.node?.name || 'Unbekannt';\nconst timestamp = new Date().toLocaleString('de-DE', {\n  timeZone: 'Europe/Berlin'\n});\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\"></head>\n<body style=\"font-family:Arial,sans-serif;background:#f3f4f6;padding:20px;color:#1f2937\">\n<div style=\"max-width:700px;margin:auto;background:white;padding:25px\">\n\n<h1 style=\"color:#dc2626\">IT Security – Workflow-Fehler</h1>\n\n<p>Ein Workflow konnte nicht erfolgreich ausgeführt werden.</p>\n\n<table width=\"100%\" cellpadding=\"10\" style=\"border-collapse:collapse\">\n<tr style=\"background:#f3f4f6\">\n<td><b>Workflow</b></td>\n<td>${esc(workflowName)}</td>\n</tr>\n<tr>\n<td><b>Workflow-ID</b></td>\n<td>${esc(workflowId)}</td>\n</tr>\n<tr style=\"background:#f3f4f6\">\n<td><b>Execution-ID</b></td>\n<td>${esc(executionId)}</td>\n</tr>\n<tr>\n<td><b>Fehlerhafter Node</b></td>\n<td>${esc(errorNode)}</td>\n</tr>\n<tr style=\"background:#f3f4f6\">\n<td><b>Zeitpunkt</b></td>\n<td>${esc(timestamp)}</td>\n</tr>\n</table>\n\n<h2 style=\"color:#dc2626\">Fehlerbeschreibung</h2>\n\n<div style=\"background:#fee2e2;padding:15px;border-left:4px solid #dc2626\">\n${esc(errorMessage)}\n</div>\n\n<p style=\"margin-top:25px;color:#64748b;font-size:12px\">\nAutomatische Benachrichtigung durch n8n IT Security Monitoring.\n</p>\n\n</div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    subject: `⚠️ n8n Fehler: ${workflowName}`,\n    html,\n    workflowName,\n    executionId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2704,
+        240
+      ],
+      "id": "566ca6ac-f001-4db4-bd42-9cd9fc1b02d0",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s)": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Test_CVE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test_CVE": {
+      "main": [
+        [
+          {
+            "node": "Analyze Security",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Security": {
+      "main": [
+        [
+          {
+            "node": "Split CVEs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Split CVEs": {
+      "main": [
+        [
+          {
+            "node": "Check CVEs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Check CVEs": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "CVE Risk Management",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CVE Risk Management": {
+      "main": [
+        [
+          {
+            "node": "Aggregate CVE Findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate CVE Findings": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Calculate Asset Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Asset Risk": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "timeSavedPerExecution": 25
+  },
+  "versionId": "ae4d2c63-972b-4aa7-b77b-8ee9099faaf6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "26492fd0705754e5c1d003597ce6ae0965ef81d0515d8edc537ad0a92c2b9887"
+  },
+  "nodeGroups": [],
+  "id": "nUfgseoQzlCt4RCp",
+  "tags": []
+}
