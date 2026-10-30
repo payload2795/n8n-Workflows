@@ -1,0 +1,508 @@
+{
+  "name": "HIBP Breach Report",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -432,
+        -128
+      ],
+      "id": "900cd81a-4a13-47de-9dd6-c8f452e49c6b",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://haveibeenpwned.com/api/v3/breaches",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-HIBP-Breach-Monitor/1.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -144,
+        -128
+      ],
+      "id": "6e685577-a306-46b2-a307-d5520769c6fb",
+      "name": "Get Breaches"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "meSS0DlfrJqRQx73",
+          "mode": "list",
+          "cachedResultName": "HIBP Known Breaches",
+          "cachedResultUrl": "/projects/COq2CyrS8Ovl9Uuv/datatables/meSS0DlfrJqRQx73"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -144,
+        -288
+      ],
+      "id": "cc17b825-6412-40a0-b821-0ba78f4faf43",
+      "name": "Get Known Breaches",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "meSS0DlfrJqRQx73",
+          "mode": "list",
+          "cachedResultName": "HIBP Known Breaches",
+          "cachedResultUrl": "/projects/COq2CyrS8Ovl9Uuv/datatables/meSS0DlfrJqRQx73"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $json.Name }}",
+            "addedDate": "={{ $json.BreachDate }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "addedDate",
+              "displayName": "addedDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        864,
+        -384
+      ],
+      "id": "81d10f60-e274-4d7d-a973-0d9aab49e4b2",
+      "name": "Insert row"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        160,
+        -272
+      ],
+      "id": "edb11ce8-57ae-48b9-b248-13b0bb06bf47",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Alle neuen Breaches einsammeln\nconst breaches = $input.all().map(item => item.json);\n\n// HTML-Escaping gegen fehlerhafte HTML-Ausgabe\nfunction escapeHtml(value) {\n  return String(value ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;');\n}\n\nfunction formatDescription(value) {\n  if (!value) return '';\n\n  return String(value)\n    // Markdown-Links in HTML-Links umwandeln\n    .replace(\n      /\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g,\n      '<a href=\"$2\" target=\"_blank\" rel=\"noopener\">$1</a>'\n    )\n    // Markdown-Formatierungsreste entfernen\n    .replace(/\\\\</g, '<')\n    .replace(/\\\\>/g, '>')\n    .replace(/\\\\_/g, '_')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&amp;/g, '&')\n    // Zeilenumbrüche\n    .replace(/\\n/g, '<br>');\n}\n\n// Zahlen formatieren\nfunction formatNumber(value) {\n  return Number(value || 0).toLocaleString('de-DE');\n}\n\n// HTML für jeden Breach erzeugen\nconst breachHtml = breaches.map(b => `\n  <div style=\"border:1px solid #ddd; border-radius:8px;\n              padding:16px; margin-bottom:16px;\">\n\n    <h2 style=\"margin-top:0; color:#c0392b;\">\n      ${escapeHtml(b.Title || b.Name)}\n    </h2>\n\n    <p><strong>Domain:</strong> ${escapeHtml(b.Domain || '-')}</p>\n    <p><strong>Vorfallsdatum:</strong> ${escapeHtml(b.BreachDate || '-')}</p>\n    <p><strong>Veröffentlicht:</strong> ${escapeHtml(b.AddedDate || '-')}</p>\n    <p><strong>Betroffene Accounts:</strong>\n       ${formatNumber(b.PwnCount)}</p>\n\n    <p><strong>Kompromittierte Daten:</strong><br>\n       ${escapeHtml((b.DataClasses || []).join(', '))}</p>\n\n    <div style=\"line-height:1.6; margin-top:12px;\">\n    ${formatDescription(b.Description)}\n    </div>\n  </div>\n`).join('');\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<body style=\"font-family:Arial,sans-serif; color:#333;\n             max-width:800px; margin:auto;\">\n\n  <div style=\"background:#202b38; color:white; padding:24px;\">\n    <h1 style=\"margin:0;\">HIBP Security Report</h1>\n    <p>Neue Data Breaches erkannt</p>\n  </div>\n\n  <div style=\"padding:24px;\">\n    <h2>${breaches.length} neue Breaches gefunden</h2>\n\n    <p>Der HIBP-Katalog enthält neue Sicherheitsvorfälle,\n       die bisher nicht in unserem Monitoring erfasst waren.</p>\n\n    ${breachHtml}\n\n    <hr>\n    <p style=\"font-size:12px; color:#777;\">\n      Automatisch generierter Bericht durch n8n.<br>\n      Quelle: Have I Been Pwned\n    </p>\n  </div>\n\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    subject: `HIBP Security Alert: ${breaches.length} neue Breaches`,\n    html,\n    breachCount: breaches.length,\n    breaches\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -256
+      ],
+      "id": "fb1c6219-77c9-4a20-abe1-5485dfa0fb46",
+      "name": "Build HTML Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ursprüngliche Breaches aus dem HTML-Node holen\nconst breaches = $('Build HTML Report').first().json.breaches;\n\n// Wieder einzelne Items für die DataTable erzeugen\nreturn breaches.map(b => ({\n  json: {\n    name: b.Name,\n    addedDate: b.AddedDate\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        -256
+      ],
+      "id": "f1e4e117-955a-4300-a6eb-8fcfb304dd2c",
+      "name": "Prepare Buffer Insert"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "d26b20fc-872f-40b1-90dc-96793c00260e",
+              "leftValue": "={{ $json.firstRun }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        640,
+        -272
+      ],
+      "id": "20066630-1922-40c5-983f-ffb51dfb8145",
+      "name": "If firstTime"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "fc208919-297f-489d-9966-c7bb98ca7870",
+              "leftValue": "={{ $json.isNew }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        864,
+        -176
+      ],
+      "id": "fade677b-fb14-44a8-acac-e1f616dc2880",
+      "name": "If isNew"
+    },
+    {
+      "parameters": {
+        "fromEmail": "breach@phil27.de",
+        "toEmail": "philipdittmar@t-online.de",
+        "subject": "={{ $('Build HTML Report').item.json.subject }}",
+        "html": "={{ $('Build HTML Report').item.json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1680,
+        -160
+      ],
+      "id": "e2e48062-6243-495e-a2e5-9af9e1b43286",
+      "name": "Send an Email",
+      "webhookId": "4e1062a1-c52f-44f2-9aaa-aaa1110effdd",
+      "credentials": {
+        "smtp": {
+          "id": "PTT0Q0efPdiLeARV",
+          "name": "phil27.de-smtp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "meSS0DlfrJqRQx73",
+          "mode": "list",
+          "cachedResultName": "HIBP Known Breaches",
+          "cachedResultUrl": "/projects/COq2CyrS8Ovl9Uuv/datatables/meSS0DlfrJqRQx73"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $json.name }}",
+            "addedDate": "={{ $json.addedDate }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "addedDate",
+              "displayName": "addedDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1520,
+        -320
+      ],
+      "id": "a9eefb26-1815-4dac-83eb-0c1ab518a8f7",
+      "name": "Insert row1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// HIBP-Katalog\nconst allBreaches = $('Get Breaches')\n  .all()\n  .map(item => item.json);\n\n// Bereits gespeicherte Breaches\nconst knownItems = $('Get Known Breaches')\n  .all()\n  .filter(item => item.json.name);\n\nconst knownNames = new Set(\n  knownItems.map(item => item.json.name)\n);\n\n// Erstinitialisierung\nconst firstRun = knownItems.length === 0;\n\n// Alle Breaches einzeln ausgeben\nreturn allBreaches.map(breach => ({\n  json: {\n    Name: breach.Name,\n    Title: breach.Title,\n    Domain: breach.Domain,\n    BreachDate: breach.BreachDate,\n    AddedDate: breach.AddedDate,\n    PwnCount: breach.PwnCount,\n    DataClasses: breach.DataClasses,\n    Description: breach.Description,\n\n    firstRun,\n    isKnown: knownNames.has(breach.Name),\n    isNew: !knownNames.has(breach.Name)\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        -272
+      ],
+      "id": "c4a44b18-27aa-44b9-8b92-1e0e2baac064",
+      "name": "compare breach sets"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6,
+              "triggerAtMinute": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -432,
+        -288
+      ],
+      "id": "0186d8b6-e401-4506-b1c7-8eecadf59577",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        -160
+      ],
+      "id": "f86c1139-41a1-48ed-a74a-1d0ee68e5d6f",
+      "name": "Limit"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get Breaches",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Known Breaches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Breaches": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Known Breaches": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "compare breach sets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Prepare Buffer Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If firstTime": {
+      "main": [
+        [
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If isNew",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If isNew": {
+      "main": [
+        [
+          {
+            "node": "Build HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Buffer Insert": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        []
+      ]
+    },
+    "compare breach sets": {
+      "main": [
+        [
+          {
+            "node": "If firstTime",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Known Breaches",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Breaches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "1d869697-c49a-4261-aaa3-37fda1f75e9d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "26492fd0705754e5c1d003597ce6ae0965ef81d0515d8edc537ad0a92c2b9887"
+  },
+  "nodeGroups": [],
+  "id": "Lkx4baAPAbp7HtdS",
+  "tags": []
+}
