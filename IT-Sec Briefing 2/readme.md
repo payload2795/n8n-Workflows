@@ -61,11 +61,11 @@ Schedule / Manual Trigger
                  ┌──────────────┴──────────────┐
                  ▼                             ▼
           Netzwerk-Risiko                 CVE-Prüfung
-                                               │
-                                     Shodan CVE / NVD
-                                               │
-                                      CVE-Korrelation
-                                               │
+                 │                             │
+                 │                   Shodan CVE / NVD
+                 │                             │
+                 │                    CVE-Korrelation
+                 │                             │
                  └──────────────┬──────────────┘
                                 ▼
                        Asset Risk Management
@@ -115,7 +115,7 @@ Beispiel:
 
 ``` text
 name: ReverseProxy
-ip: 89.107.163.59
+ip: x.x.x.x
 environment: Production
 expected_ports: 80,443
 active: true
@@ -185,7 +185,7 @@ Ein Scan wird beispielsweise so ausgelöst:
 
 ``` json
 {
-  "ip": "89.107.163.59"
+  "ip": "1.2.3.365"
 }
 ```
 
@@ -1056,71 +1056,3 @@ Korrelation + Risikobewertung
 Diese Trennung ist wichtig, weil ein allgemeiner CVE-Hinweis nicht
 automatisch bedeutet, dass das konkrete System verwundbar ist.
 
-------------------------------------------------------------------------
-
-# 27. Empfohlene nächste Ausbaustufen
-
-Sinnvolle Erweiterungen wären:
-
-1.  **Scanner-Authentifizierung**
-    -   z.  B. API-Key zwischen n8n und Scanner.
-2.  **Rate Limiting**
-    -   verhindert unbeabsichtigte Scan-Fluten.
-3.  **Scan-Historie**
-    -   Ports und Risiken über mehrere Tage vergleichen.
-4.  **Change Detection**
-    -   neue offene Ports besonders hervorheben.
-5.  **CVE-Historie**
-    -   neue CVEs gegenüber dem letzten Lauf markieren.
-6.  **Schweregrad pro Asset**
-    -   Production-Systeme stärker gewichten als Testsysteme.
-7.  **Explizite Bestätigung**
-    -   `CPE_VERSION_MATCH` erst nach manueller Prüfung als bestätigt
-        markieren.
-8.  **Scanner-Netzwerk absichern**
-    -   eigenes Docker-Netzwerk und nur die notwendige Kommunikation
-        erlauben.
-
-------------------------------------------------------------------------
-
-# 28. Kurzfassung
-
-Der Workflow ist kein einfacher Portscanner.
-
-Er kombiniert:
-
-``` text
-Asset-Inventar
-+
-Shodan
-+
-Nmap
-+
-NVD
-+
-CVE-Korrelation
-+
-Risikobewertung
-+
-HTML-Reporting
-```
-
-Der entscheidende Punkt ist die Korrelation:
-
-``` text
-CVE gefunden
-    ≠
-System verwundbar
-```
-
-Erst die Kombination aus externen Informationen, aktuell erkanntem
-Dienst, Produkt und Version liefert eine belastbarere Aussage.
-
-Der Nmap-Scanner sollte dabei ausschließlich intern im Docker-Netzwerk
-erreichbar sein und über den Service-Namen:
-
-``` text
-http://nmap-scanner:8080/scan
-```
-
-angesprochen werden.
