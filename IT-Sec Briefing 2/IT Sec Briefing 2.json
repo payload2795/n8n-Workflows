@@ -78,7 +78,7 @@
       "typeVersion": 2,
       "position": [
         800,
-        96
+        -32
       ],
       "id": "37cd9f9e-ef90-426c-9a27-a3fa34181a22",
       "name": "Analyze Security"
@@ -104,8 +104,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1920,
-        -80
+        1536,
+        -32
       ],
       "id": "00d7ae12-4d5e-45a3-995e-3474e10db7bc",
       "name": "Split CVEs"
@@ -118,8 +118,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        2144,
-        -272
+        1792,
+        -144
       ],
       "id": "f2c64ff0-54cc-425d-b6c5-86c1c05df1f1",
       "name": "Check CVEs"
@@ -133,8 +133,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        2352,
-        -96
+        2032,
+        -48
       ],
       "id": "db41ca2d-5181-4e8a-b048-1c1077274e5c",
       "name": "Merge1"
@@ -146,8 +146,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2560,
-        -256
+        2336,
+        -48
       ],
       "id": "ed3c9011-4fdb-47fa-b6a0-9e7c592f22d3",
       "name": "CVE Risk Management"
@@ -159,8 +159,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3664,
-        -192
+        3424,
+        -32
       ],
       "id": "2064688c-0eca-48c2-b6a6-c330a8ba7da6",
       "name": "Aggregate CVE Findings"
@@ -183,8 +183,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        4048,
-        160
+        3760,
+        128
       ],
       "id": "0c0ce9a6-7c11-4877-8be3-e7e58c2f760e",
       "name": "Merge2"
@@ -196,8 +196,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4272,
-        160
+        3984,
+        128
       ],
       "id": "634056c6-db46-4e72-8808-3645b49f4edd",
       "name": "Calculate Asset Risk"
@@ -209,8 +209,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4496,
-        160
+        4208,
+        128
       ],
       "id": "7000fc8e-5970-46d8-994c-acc4990e1beb",
       "name": "Generate HTML Report"
@@ -228,8 +228,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        4800,
-        160
+        4448,
+        128
       ],
       "id": "9976f598-72cf-4b72-99bb-c4bbf8640dbb",
       "name": "Send an Email",
@@ -267,8 +267,8 @@
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
       "position": [
-        4272,
-        336
+        3984,
+        304
       ],
       "id": "cf141b62-64d6-4174-99c5-ba117d0669b8",
       "name": "Error Trigger"
@@ -280,8 +280,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4496,
-        336
+        4208,
+        304
       ],
       "id": "5024b9a9-51cd-41b8-b7bf-9b5f0f420ca4",
       "name": "Code in JavaScript"
@@ -310,7 +310,7 @@
       "typeVersion": 4.5,
       "position": [
         160,
-        208
+        160
       ],
       "id": "2e5f7008-396d-4d60-b315-d943b0640635",
       "name": "nmap-scan",
@@ -334,7 +334,7 @@
       "typeVersion": 3.2,
       "position": [
         1008,
-        192
+        144
       ],
       "id": "36c6f2ae-e469-45d7-8eff-febe2e928dec",
       "name": "Merge3"
@@ -346,8 +346,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1232,
-        192
+        1216,
+        144
       ],
       "id": "61a9ac59-b0b7-403f-8204-1802c9b9ec1b",
       "name": "compare nmpa and shodan"
@@ -359,8 +359,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1584,
-        192
+        1536,
+        144
       ],
       "id": "242c38a8-cf4b-41c4-a9ec-216972c01792",
       "name": "calculate network risk"
@@ -389,8 +389,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        2816,
-        -96
+        2688,
+        32
       ],
       "id": "9b70f738-e626-4216-9be9-f30dbf47e666",
       "name": "NVD Lookup",
@@ -406,8 +406,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        3040,
-        -240
+        3024,
+        -32
       ],
       "id": "d9dda996-6601-4510-afa6-1cdc275f7330",
       "name": "Merge NVD"
@@ -419,8 +419,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3264,
-        -240
+        3216,
+        -32
       ],
       "id": "47845cd5-25d8-4453-87ef-5593c9857e8b",
       "name": "CVE Correlation"
@@ -727,7 +727,7 @@
     "availableInMCP": false,
     "timeSavedPerExecution": 25
   },
-  "versionId": "f82fbf2e-7708-46ce-a228-5bba606d3013",
+  "versionId": "dca2f86d-b62c-4571-8556-d594a7e523bb",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "26492fd0705754e5c1d003597ce6ae0965ef81d0515d8edc537ad0a92c2b9887"
