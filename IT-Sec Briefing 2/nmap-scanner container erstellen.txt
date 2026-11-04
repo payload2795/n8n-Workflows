@@ -1,0 +1,9 @@
+  nmap-scanner:
+    build:
+      context: ./nmap-scanner
+    container_name: nmap-scanner
+    restart: unless-stopped
+    networks:
+      - default
+    expose:
+      - "8080"

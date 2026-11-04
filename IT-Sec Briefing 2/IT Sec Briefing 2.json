@@ -1,0 +1,738 @@
+{
+  "name": "IT Sec Briefing 2",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        160
+      ],
+      "id": "27dd92bf-38ae-49fb-8186-885111e9be7b",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "hzz0T2mON21s9MrQ",
+          "mode": "list",
+          "cachedResultName": "security_assets",
+          "cachedResultUrl": "/projects/COq2CyrS8Ovl9Uuv/datatables/hzz0T2mON21s9MrQ"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "active",
+              "condition": "isTrue"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -80,
+        -16
+      ],
+      "id": "47bbea26-26db-41bb-a51f-21d01600fa47",
+      "name": "Get row(s)"
+    },
+    {
+      "parameters": {
+        "url": "=https://internetdb.shodan.io/{{$json.ip}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        144,
+        -176
+      ],
+      "id": "a8518145-6ea4-4f02-b8d7-6bae27fcdee3",
+      "name": "HTTP Request",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        368,
+        -32
+      ],
+      "id": "ba56ea84-65a3-4e55-b254-7a0e9b2f410d",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const data = item.json;\n\n  // Erwartete Ports aus der Data Table\n  const expected = (data.expected_ports || '')\n    .split(',')\n    .map(p => Number(p.trim()))\n    .filter(p => p > 0);\n\n  // Tatsächlich von Shodan erkannte Ports\n  const observed = data.ports || [];\n\n  // Vergleich\n  const missing = expected.filter(p => !observed.includes(p));\n  const unexpected = observed.filter(p => !expected.includes(p));\n\n  return {\n    json: {\n      name: data.name,\n      ip: data.ip,\n      environment: data.environment,\n\n      expected_ports: expected,\n      observed_ports: observed,\n\n      missing_ports: missing,\n      unexpected_ports: unexpected,\n\n      vulnerabilities: data.vulns || [],\n\n      security_status:\n        unexpected.length > 0 ? 'WARNING' :\n        missing.length > 0 ? 'NOTICE' :\n        'OK'\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        96
+      ],
+      "id": "37cd9f9e-ef90-426c-9a27-a3fa34181a22",
+      "name": "Analyze Security"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  return {\n    json: {\n      ...item.json,\n      vulns: [\n        \"CVE-2021-44228\",\n        \"CVE-2023-34362\"\n      ]\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        -32
+      ],
+      "id": "82733290-3885-41e9-9757-88e1c7698895",
+      "name": "Test_CVE",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfor (const item of $input.all()) {\n  const data = item.json;\n\n  for (const cve of data.vulnerabilities || []) {\n    results.push({\n      json: {\n        name: data.name,\n        ip: data.ip,\n        environment: data.environment,\n\n        cve: typeof cve === 'string'\n          ? cve\n          : cve.cve,\n\n        // Nmap-Daten für die spätere Korrelation\n        open_ports: data.open_ports || [],\n        nmap_ports: data.nmap_ports || [],\n\n        test_mode: false\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -80
+      ],
+      "id": "00d7ae12-4d5e-45a3-995e-3474e10db7bc",
+      "name": "Split CVEs"
+    },
+    {
+      "parameters": {
+        "url": "=https://cvedb.shodan.io/cve/{{$json.cve}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2144,
+        -272
+      ],
+      "id": "f2c64ff0-54cc-425d-b6c5-86c1c05df1f1",
+      "name": "Check CVEs"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2352,
+        -96
+      ],
+      "id": "db41ca2d-5181-4e8a-b048-1c1077274e5c",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const d = item.json;\n\n  const cvss = Number(d.cvss_v3 ?? d.cvss ?? 0);\n  const epss = Number(d.epss ?? 0);\n  const kev = d.kev === true;\n\n  let risk = 'LOW';\n\n  if (kev || cvss >= 9) {\n    risk = 'CRITICAL';\n  } else if (cvss >= 7) {\n    risk = 'HIGH';\n  } else if (cvss >= 4) {\n    risk = 'MEDIUM';\n  }\n\n  return {\n    json: {\n      asset: d.name,\n      ip: d.ip,\n      environment: d.environment,\n\n      cve: d.cve_id,\n      description: d.summary,\n\n      cvss,\n      epss,\n      kev,\n      risk,\n\n      ransomware: d.ransomware_campaign || null,\n      test_mode: d.test_mode === true,\n\n      // Netzwerkdaten für die spätere CVE-Korrelation\n      open_ports: d.open_ports || [],\n      nmap_ports: d.nmap_ports || [],\n\n      // Weitere Asset-Informationen erhalten\n      observed_ports: d.observed_ports || [],\n      expected_ports: d.expected_ports || []\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        -256
+      ],
+      "id": "ed3c9011-4fdb-47fa-b6a0-9e7c592f22d3",
+      "name": "CVE Risk Management"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst grouped = {};\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  const key = d.ip;\n\n  if (!key) continue;\n\n  if (!grouped[key]) {\n    grouped[key] = {\n      name: d.asset || d.name,\n      ip: d.ip,\n      environment: d.environment,\n      vulnerabilities: []\n    };\n  }\n\n  const correlation = d.cve_correlation || {};\n  const status = correlation.status || 'NO_CORRELATION_DATA';\n\n  grouped[key].vulnerabilities.push({\n    cve: d.cve,\n    cvss: d.cvss,\n    epss: d.epss,\n    kev: d.kev,\n    risk_hint: d.risk,\n    description: d.description,\n    ransomware: d.ransomware,\n\n    // Vollständige Korrelationsdaten übernehmen\n    cve_correlation: {\n      ...correlation,\n      status\n    }\n  });\n}\n\n// Pro Asset die CVE-Kategorien zählen\nreturn Object.values(grouped).map(asset => {\n  const vulns = asset.vulnerabilities;\n\n  const countStatus = status =>\n    vulns.filter(v =>\n      v.cve_correlation.status === status\n    ).length;\n\n  const possibleCves = vulns.filter(v =>\n    [\n      'CPE_VERSION_MATCH',\n      'PRODUCT_MATCH_VERSION_UNKNOWN',\n      'RELATED_PRODUCT_REVIEW'\n    ].includes(v.cve_correlation.status)\n  );\n\n  const relatedReviews = countStatus('RELATED_PRODUCT_REVIEW');\n\n  const versionUnknown = countStatus(\n    'PRODUCT_MATCH_VERSION_UNKNOWN'\n  );\n\n  const versionMatches = countStatus('CPE_VERSION_MATCH');\n\n  const unmatchedCves = countStatus('PRODUCT_NOT_OBSERVED');\n\n  const notAffected = countStatus('VERSION_NOT_AFFECTED');\n\n  const noNvdData = countStatus('NO_NVD_DATA');\n\n  return {\n    json: {\n      ...asset,\n\n      cve_summary: {\n        total_cves: vulns.length,\n\n        possible_cves: possibleCves.length,\n\n        cpe_version_matches: versionMatches,\n\n        related_product_reviews: relatedReviews,\n\n        version_unknown: versionUnknown,\n\n        unmatched_cves: unmatchedCves,\n\n        not_affected: notAffected,\n\n        no_nvd_data: noNvdData,\n\n        // Noch keine bestätigten Schwachstellen\n        confirmed_cves: 0\n      }\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3664,
+        -192
+      ],
+      "id": "2064688c-0eca-48c2-b6a6-c330a8ba7da6",
+      "name": "Aggregate CVE Findings"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "ip",
+              "field2": "ip"
+            }
+          ]
+        },
+        "joinMode": "enrichInput2",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4048,
+        160
+      ],
+      "id": "0c0ce9a6-7c11-4877-8be3-e7e58c2f760e",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn $input.all().map(item => {\n  const d = item.json;\n\n  // CVE-Zusammenfassung aus Aggregate CVE Findings\n  const cve = d.cve_summary || {};\n\n  const totalCves = cve.total_cves || 0;\n  const possibleCves = cve.possible_cves || 0;\n  const relatedReviews = cve.related_product_reviews || 0;\n  const versionUnknown = cve.version_unknown || 0;\n  const unmatchedCves = cve.unmatched_cves || 0;\n  const notAffected = cve.not_affected || 0;\n  const noNvdData = cve.no_nvd_data || 0;\n\n  // KEV-Kandidaten nur bei möglicher Produktkorrelation zählen\n  const vulnerabilities = d.vulnerabilities || [];\n\n  const kevCandidates = vulnerabilities.filter(v =>\n    v.kev === true &&\n    [\n      'CPE_VERSION_MATCH',\n      'PRODUCT_MATCH_VERSION_UNKNOWN',\n      'RELATED_PRODUCT_REVIEW'\n    ].includes(v.cve_correlation?.status)\n  ).length;\n\n  // Netzwerkbefunde\n  const networkFindings = d.network_findings || [];\n\n  const unexpectedPorts = networkFindings.filter(\n    f => f.type === 'UNEXPECTED_PORT'\n  ).length;\n\n  const networkWarning = d.network_risk === 'WARNING';\n\n  const missingPorts = (d.missing_ports || []).length;\n\n  // Gesamtrisiko\n  let risk = 'LOW';\n\n  if (kevCandidates > 0) {\n    risk = 'HIGH';\n\n  } else if (\n    possibleCves > 0 &&\n    vulnerabilities.some(v =>\n      ['CRITICAL', 'HIGH'].includes(v.risk_hint) &&\n      [\n        'CPE_VERSION_MATCH',\n        'PRODUCT_MATCH_VERSION_UNKNOWN',\n        'RELATED_PRODUCT_REVIEW'\n      ].includes(v.cve_correlation?.status)\n    )\n  ) {\n    risk = 'HIGH';\n\n  } else if (\n    possibleCves > 0 ||\n    unexpectedPorts > 0 ||\n    networkWarning \n  ) {\n    risk = 'MEDIUM';\n  }\n\n  return {\n    json: {\n      ...d,\n\n      risk_summary: {\n        overall: risk,\n\n        total_cves: totalCves,\n        potential_cves: possibleCves,\n\n        cpe_version_matches: cve.cpe_version_matches || 0,\n        related_product_reviews: relatedReviews,\n        version_unknown: versionUnknown,\n\n        kev_candidates: kevCandidates,\n        unmatched_cves: unmatchedCves,\n        not_affected: notAffected,\n        no_nvd_data: noNvdData,\n\n        confirmed_cves: 0,\n\n        unexpected_ports: unexpectedPorts,\n        missing_ports: missingPorts,\n        network_risk: d.network_risk || 'UNKNOWN'\n      }\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4272,
+        160
+      ],
+      "id": "634056c6-db46-4e72-8808-3645b49f4edd",
+      "name": "Calculate Asset Risk"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\nconst assets = items.map(item => item.json);\n\n// --------------------------------------------------\n// Hilfsfunktionen\n// --------------------------------------------------\n\nconst esc = value => String(value ?? '')\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;')\n  .replace(/\"/g, '&quot;')\n  .replace(/'/g, '&#39;');\n\nconst number = value => Number(value) || 0;\n\nconst colors = {\n  HIGH: '#dc2626',\n  MEDIUM: '#d97706',\n  LOW: '#16a34a',\n  UNKNOWN: '#64748b'\n};\n\nconst riskLabel = risk => ({\n  HIGH: 'HOCH',\n  MEDIUM: 'MITTEL',\n  LOW: 'NIEDRIG'\n}[risk] || 'UNBEKANNT');\n\nconst correlationLabel = status => ({\n  CPE_VERSION_MATCH: 'Möglicher Versions-Treffer – prüfen',\n  PRODUCT_MATCH_VERSION_UNKNOWN: 'Produkt erkannt – Version prüfen',\n  RELATED_PRODUCT_REVIEW: 'Ähnliches Produkt – prüfen',\n  VERSION_NOT_AFFECTED: 'Laut Versionsabgleich nicht betroffen',\n  PRODUCT_NOT_OBSERVED: 'Produkt nicht nachgewiesen',\n  NO_NVD_DATA: 'Keine NVD-Daten'\n}[status] || status || 'Nicht bewertet');\n\nconst possibleStatuses = [\n  'CPE_VERSION_MATCH',\n  'PRODUCT_MATCH_VERSION_UNKNOWN',\n  'RELATED_PRODUCT_REVIEW'\n];\n\nconst formatDate = value => {\n  if (!value) return 'Unbekannt';\n\n  const date = new Date(value);\n\n  return Number.isNaN(date.getTime())\n    ? esc(value)\n    : date.toLocaleString('de-DE', {\n        dateStyle: 'medium',\n        timeStyle: 'short'\n      });\n};\n\nconst pill = (value, background = '#f1f5f9', color = '#334155') => `\n  <span style=\"\n    display:inline-block;\n    padding:5px 9px;\n    margin:2px 3px 2px 0;\n    border-radius:6px;\n    background:${background};\n    color:${color};\n    font-size:12px;\n    font-weight:600;\">\n    ${esc(value)}\n  </span>\n`;\n\nconst portList = (ports, emptyText = 'Keine') => {\n  const unique = [...new Set((ports || []).map(Number))]\n    .filter(Number.isFinite)\n    .sort((a, b) => a - b);\n\n  return unique.length\n    ? unique.map(port => pill(port)).join('')\n    : `<span style=\"color:#94a3b8;font-size:12px;\">${emptyText}</span>`;\n};\n\nconst metricCard = (value, label, color = '#0f172a', hint = '') => `\n  <td width=\"25%\" valign=\"top\" style=\"padding:5px;\">\n    <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n      style=\"background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;\">\n      <tr>\n        <td style=\"padding:15px;\">\n          <div style=\"font-size:26px;font-weight:700;color:${color};\">\n            ${value}\n          </div>\n          <div style=\"font-size:11px;color:#475569;margin-top:5px;\">\n            ${label}\n          </div>\n          ${hint ? `<div style=\"font-size:10px;color:#94a3b8;margin-top:4px;\">${hint}</div>` : ''}\n        </td>\n      </tr>\n    </table>\n  </td>\n`;\n\n// --------------------------------------------------\n// Gesamtauswertung\n// --------------------------------------------------\n\nconst count = {\n  assets: assets.length,\n\n  high: assets.filter(a => a.risk_summary?.overall === 'HIGH').length,\n  medium: assets.filter(a => a.risk_summary?.overall === 'MEDIUM').length,\n  low: assets.filter(a => a.risk_summary?.overall === 'LOW').length,\n\n  possibleCves: assets.reduce(\n    (sum, a) => sum + number(a.risk_summary?.potential_cves), 0\n  ),\n\n  kev: assets.reduce(\n    (sum, a) => sum + number(a.risk_summary?.kev_candidates), 0\n  ),\n\n  unexpectedPorts: assets.reduce(\n    (sum, a) => sum + number(a.risk_summary?.unexpected_ports), 0\n  ),\n\n  confirmedCves: assets.reduce(\n    (sum, a) => sum + number(a.risk_summary?.confirmed_cves), 0\n  )\n};\n\nconst generatedAt = new Date().toLocaleString('de-DE', {\n  dateStyle: 'full',\n  timeStyle: 'short'\n});\n\nconst overallColor = count.high > 0\n  ? colors.HIGH\n  : count.medium > 0\n    ? colors.MEDIUM\n    : colors.LOW;\n\nconst overallText = count.high > 0\n  ? 'Erhöhter Handlungsbedarf'\n  : count.medium > 0\n    ? 'Prüfbedarf vorhanden'\n    : 'Keine erhöhten Risiken erkannt';\n\n// --------------------------------------------------\n// Asset-Übersicht\n// --------------------------------------------------\n\nconst assetOverview = assets.map(asset => {\n  const risk = asset.risk_summary?.overall || 'UNKNOWN';\n  const summary = asset.risk_summary || {};\n  const color = colors[risk] || colors.UNKNOWN;\n\n  return `\n    <tr>\n      <td style=\"padding:13px 10px;border-bottom:1px solid #e2e8f0;\">\n        <strong style=\"color:#0f172a;\">${esc(asset.name)}</strong>\n        <div style=\"font-size:11px;color:#64748b;margin-top:4px;\">\n          ${esc(asset.ip)} · ${esc(asset.environment)}\n        </div>\n      </td>\n\n      <td align=\"center\" style=\"padding:10px;border-bottom:1px solid #e2e8f0;\">\n        <span style=\"background:${color};color:#fff;padding:6px 10px;\n          border-radius:20px;font-size:10px;font-weight:bold;\">\n          ${riskLabel(risk)}\n        </span>\n      </td>\n\n      <td align=\"center\" style=\"padding:10px;border-bottom:1px solid #e2e8f0;\n        color:#b45309;font-weight:bold;\">\n        ${number(summary.potential_cves)}\n      </td>\n\n      <td align=\"center\" style=\"padding:10px;border-bottom:1px solid #e2e8f0;\n        color:#dc2626;font-weight:bold;\">\n        ${number(summary.kev_candidates)}\n      </td>\n\n      <td align=\"center\" style=\"padding:10px;border-bottom:1px solid #e2e8f0;\n        color:#dc2626;font-weight:bold;\">\n        ${number(summary.unexpected_ports)}\n      </td>\n    </tr>\n  `;\n}).join('');\n\n// --------------------------------------------------\n// Asset-Detailkarten\n// --------------------------------------------------\n\nconst assetDetails = assets.map(asset => {\n  const risk = asset.risk_summary?.overall || 'UNKNOWN';\n  const summary = asset.risk_summary || {};\n  const cveSummary = asset.cve_summary || {};\n  const riskColor = colors[risk] || colors.UNKNOWN;\n\n  const expected = asset.expected_ports || [];\n  const nmap = asset.nmap_ports || [];\n  const shodan = asset.observed_ports || [];\n\n  const comparison = asset.port_comparison || {};\n\n  const unexpected = comparison.unexpected_nmap || [];\n  const missing = comparison.missing_expected || [];\n  const onlyNmap = comparison.only_nmap || [];\n  const onlyShodan = comparison.only_shodan || [];\n  const common = comparison.common || [];\n\n  const vulnerabilities = asset.vulnerabilities || [];\n  const findings = asset.network_findings || [];\n\n  const unexpectedFindings = findings.filter(\n    f => f.type === 'UNEXPECTED_PORT'\n  );\n\n  const informationalFindings = findings.filter(\n    f => f.type !== 'UNEXPECTED_PORT'\n  );\n\n  const networkRisk = asset.network_risk || 'UNKNOWN';\n  const networkColor = networkRisk === 'WARNING'\n    ? colors.MEDIUM\n    : networkRisk === 'OK'\n      ? colors.LOW\n      : colors.UNKNOWN;\n\n  const cveRows = vulnerabilities.map(v => {\n    const status = v.cve_correlation?.status;\n    const possible = possibleStatuses.includes(status);\n\n    const statusColor = possible ? '#b45309' : '#475569';\n    const kevColor = v.kev === true ? '#dc2626' : '#64748b';\n\n    return `\n      <tr>\n        <td valign=\"top\" style=\"padding:13px 9px;border-bottom:1px solid #e2e8f0;\">\n          <a href=\"https://nvd.nist.gov/vuln/detail/${encodeURIComponent(v.cve || '')}\"\n            style=\"font-weight:bold;color:#2563eb;text-decoration:none;\">\n            ${esc(v.cve || 'Unbekannte CVE')}\n          </a>\n\n          <div style=\"font-size:11px;color:#64748b;margin-top:6px;\">\n            CVSS: <strong>${esc(v.cvss ?? '–')}</strong>\n          </div>\n\n          <div style=\"font-size:11px;color:${kevColor};margin-top:4px;font-weight:bold;\">\n            KEV: ${v.kev === true ? 'JA – im KEV-Katalog' : 'Nein'}\n          </div>\n\n          <div style=\"font-size:11px;color:#64748b;margin-top:4px;\">\n            Risiko-Hinweis: ${esc(v.risk_hint || 'Unbekannt')}\n          </div>\n        </td>\n\n        <td valign=\"top\" style=\"padding:13px 9px;border-bottom:1px solid #e2e8f0;\">\n          <div style=\"font-size:12px;font-weight:bold;color:${statusColor};\">\n            ${esc(correlationLabel(status))}\n          </div>\n\n          <div style=\"font-size:11px;color:#64748b;margin-top:7px;line-height:1.6;\">\n            ${esc(v.description || 'Keine Beschreibung verfügbar')}\n          </div>\n        </td>\n      </tr>\n    `;\n  }).join('');\n\n  const findingRows = unexpectedFindings.map(f => `\n    <tr>\n      <td style=\"padding:9px;border-bottom:1px solid #e2e8f0;\">\n        <strong>${esc(f.port)}</strong>\n      </td>\n      <td style=\"padding:9px;border-bottom:1px solid #e2e8f0;\">\n        ${esc(f.service || 'Unbekannt')}\n      </td>\n      <td style=\"padding:9px;border-bottom:1px solid #e2e8f0;color:#b45309;\">\n        ${esc(f.message || 'Unerwarteter Port')}\n      </td>\n    </tr>\n  `).join('');\n\n  const infoRows = informationalFindings.map(f => `\n    <tr>\n      <td style=\"padding:8px;border-bottom:1px solid #e2e8f0;\">\n        ${esc(f.type || 'INFO')}\n      </td>\n      <td style=\"padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b;\">\n        ${esc(f.message || 'Keine weitere Beschreibung')}\n      </td>\n    </tr>\n  `).join('');\n\n  return `\n    <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n      style=\"margin-top:18px;background:#ffffff;border:1px solid #e2e8f0;\n      border-radius:10px;\">\n\n      <!-- Asset-Kopf -->\n      <tr>\n        <td style=\"padding:19px 20px;background:#f8fafc;\n          border-bottom:1px solid #e2e8f0;\">\n\n          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n            <tr>\n              <td>\n                <div style=\"font-size:17px;font-weight:bold;color:#0f172a;\">\n                  ${esc(asset.name)}\n                </div>\n                <div style=\"font-size:12px;color:#64748b;margin-top:5px;\">\n                  ${esc(asset.ip)} · ${esc(asset.environment)}\n                </div>\n              </td>\n\n              <td align=\"right\" valign=\"middle\">\n                <span style=\"display:inline-block;background:${riskColor};\n                  color:#ffffff;padding:7px 11px;border-radius:20px;\n                  font-size:11px;font-weight:bold;\">\n                  ${riskLabel(risk)}\n                </span>\n              </td>\n            </tr>\n          </table>\n\n          <div style=\"margin-top:12px;font-size:11px;color:#64748b;\">\n            Netzwerkstatus:\n            <strong style=\"color:${networkColor};\">${esc(networkRisk)}</strong>\n            · Scan:\n            <strong>${asset.scan_success === true ? 'Erfolgreich' : 'Nicht erfolgreich / unbekannt'}</strong>\n          </div>\n        </td>\n      </tr>\n\n      <tr>\n        <td style=\"padding:19px 20px;\">\n\n          <!-- CVE-Kennzahlen -->\n          <div style=\"font-size:13px;font-weight:bold;color:#0f172a;margin-bottom:10px;\">\n            Sicherheitsanalyse\n          </div>\n\n          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n            style=\"background:#f8fafc;border-radius:8px;\">\n            <tr>\n              <td width=\"25%\" style=\"padding:11px 8px;\">\n                <div style=\"font-size:21px;font-weight:bold;color:#0f172a;\">\n                  ${number(summary.total_cves)}\n                </div>\n                <div style=\"font-size:10px;color:#64748b;\">CVE-Hinweise</div>\n              </td>\n\n              <td width=\"25%\" style=\"padding:11px 8px;\">\n                <div style=\"font-size:21px;font-weight:bold;color:#b45309;\">\n                  ${number(summary.potential_cves)}\n                </div>\n                <div style=\"font-size:10px;color:#64748b;\">Mögliche Treffer</div>\n              </td>\n\n              <td width=\"25%\" style=\"padding:11px 8px;\">\n                <div style=\"font-size:21px;font-weight:bold;color:#dc2626;\">\n                  ${number(summary.kev_candidates)}\n                </div>\n                <div style=\"font-size:10px;color:#64748b;\">KEV-Kandidaten</div>\n              </td>\n\n              <td width=\"25%\" style=\"padding:11px 8px;\">\n                <div style=\"font-size:21px;font-weight:bold;color:#16a34a;\">\n                  ${number(summary.confirmed_cves)}\n                </div>\n                <div style=\"font-size:10px;color:#64748b;\">Bestätigt</div>\n              </td>\n            </tr>\n          </table>\n\n          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n            style=\"margin-top:9px;background:#f8fafc;border-radius:8px;\">\n            <tr>\n              <td width=\"25%\" style=\"padding:10px 8px;\">\n                <strong>${number(cveSummary.cpe_version_matches)}</strong>\n                <div style=\"font-size:10px;color:#64748b;\">Versions-Treffer</div>\n              </td>\n              <td width=\"25%\" style=\"padding:10px 8px;\">\n                <strong>${number(cveSummary.related_product_reviews)}</strong>\n                <div style=\"font-size:10px;color:#64748b;\">Produkt-Prüfungen</div>\n              </td>\n              <td width=\"25%\" style=\"padding:10px 8px;\">\n                <strong>${number(cveSummary.version_unknown)}</strong>\n                <div style=\"font-size:10px;color:#64748b;\">Version unbekannt</div>\n              </td>\n              <td width=\"25%\" style=\"padding:10px 8px;\">\n                <strong>${number(cveSummary.unmatched_cves)}</strong>\n                <div style=\"font-size:10px;color:#64748b;\">Nicht korreliert</div>\n              </td>\n            </tr>\n          </table>\n\n          <div style=\"margin-top:9px;font-size:11px;color:#64748b;\">\n            Nicht betroffen: ${number(cveSummary.not_affected)}\n            · Keine NVD-Daten: ${number(cveSummary.no_nvd_data)}\n          </div>\n\n          <!-- CVE-Details -->\n          <div style=\"border-top:1px solid #e2e8f0;margin-top:19px;padding-top:16px;\">\n            <div style=\"font-size:13px;font-weight:bold;color:#0f172a;margin-bottom:10px;\">\n              CVE-Details\n            </div>\n\n            ${vulnerabilities.length ? `\n              <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n                style=\"border-collapse:collapse;font-size:12px;\">\n                <tr style=\"background:#f1f5f9;text-align:left;\">\n                  <th width=\"30%\" style=\"padding:9px;\">Schwachstelle</th>\n                  <th style=\"padding:9px;\">Korrelation und Beschreibung</th>\n                </tr>\n                ${cveRows}\n              </table>\n            ` : `\n              <div style=\"padding:13px;background:#f0fdf4;border-radius:7px;\n                font-size:12px;color:#166534;\">\n                Keine CVE-Hinweise für dieses Asset gefunden.\n              </div>\n            `}\n          </div>\n\n          <!-- Netzwerk -->\n          <div style=\"border-top:1px solid #e2e8f0;margin-top:19px;padding-top:16px;\">\n            <div style=\"font-size:13px;font-weight:bold;color:#0f172a;margin-bottom:13px;\">\n              Netzwerk- und Portanalyse\n            </div>\n\n            <div style=\"font-size:11px;color:#64748b;margin-bottom:5px;\">\n              In der Asset-Konfiguration freigegeben\n            </div>\n            <div style=\"margin-bottom:12px;\">\n              ${portList(expected)}\n            </div>\n\n            <div style=\"font-size:11px;color:#64748b;margin-bottom:5px;\">\n              Durch Nmap gefunden\n            </div>\n            <div style=\"margin-bottom:12px;\">\n              ${portList(nmap)}\n            </div>\n\n            <div style=\"font-size:11px;color:#64748b;margin-bottom:5px;\">\n              Durch Shodan gefunden\n            </div>\n            <div style=\"margin-bottom:12px;\">\n              ${portList(shodan)}\n            </div>\n\n            <div style=\"font-size:11px;color:#64748b;margin-bottom:5px;\">\n              Von beiden Quellen gefunden\n            </div>\n            <div style=\"margin-bottom:12px;\">\n              ${portList(common)}\n            </div>\n\n            <div style=\"font-size:11px;color:#b91c1c;font-weight:bold;margin-bottom:5px;\">\n              Unerwartete Nmap-Ports\n            </div>\n            <div style=\"margin-bottom:12px;\">\n              ${unexpected.length\n                ? unexpected.map(p => pill(p, '#fef2f2', '#b91c1c')).join('')\n                : '<span style=\"font-size:12px;color:#16a34a;\">Keine unerwarteten Ports</span>'}\n            </div>\n\n            <div style=\"font-size:11px;color:#b45309;font-weight:bold;margin-bottom:5px;\">\n              Erwartete, aber nicht gefundene Ports\n            </div>\n            <div style=\"margin-bottom:12px;\">\n              ${missing.length\n                ? missing.map(p => pill(p, '#fffbeb', '#b45309')).join('')\n                : '<span style=\"font-size:12px;color:#16a34a;\">Alle erwarteten Ports gefunden</span>'}\n            </div>\n\n            <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n              style=\"background:#f8fafc;border-radius:7px;margin-top:8px;\">\n              <tr>\n                <td width=\"50%\" style=\"padding:11px;\">\n                  <div style=\"font-size:18px;font-weight:bold;color:#b45309;\">\n                    ${onlyNmap.length}\n                  </div>\n                  <div style=\"font-size:10px;color:#64748b;\">\n                    Nur Nmap\n                  </div>\n                </td>\n                <td width=\"50%\" style=\"padding:11px;\">\n                  <div style=\"font-size:18px;font-weight:bold;color:#2563eb;\">\n                    ${onlyShodan.length}\n                  </div>\n                  <div style=\"font-size:10px;color:#64748b;\">\n                    Nur Shodan\n                  </div>\n                </td>\n              </tr>\n            </table>\n          </div>\n\n          <!-- Netzwerkbefunde -->\n          ${unexpectedFindings.length ? `\n            <div style=\"border-top:1px solid #e2e8f0;margin-top:19px;padding-top:16px;\">\n              <div style=\"font-size:13px;font-weight:bold;color:#b91c1c;margin-bottom:10px;\">\n                Auffällige Netzwerkbefunde\n              </div>\n\n              <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n                style=\"border-collapse:collapse;font-size:12px;\">\n                <tr style=\"background:#fef2f2;text-align:left;\">\n                  <th style=\"padding:9px;\">Port</th>\n                  <th style=\"padding:9px;\">Dienst</th>\n                  <th style=\"padding:9px;\">Befund</th>\n                </tr>\n                ${findingRows}\n              </table>\n            </div>\n          ` : ''}\n\n          ${informationalFindings.length ? `\n            <div style=\"border-top:1px solid #e2e8f0;margin-top:16px;padding-top:13px;\">\n              <div style=\"font-size:12px;font-weight:bold;color:#475569;margin-bottom:8px;\">\n                Weitere Netzwerkhinweise\n              </div>\n\n              <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n                style=\"font-size:11px;border-collapse:collapse;\">\n                ${infoRows}\n              </table>\n            </div>\n          ` : ''}\n\n          <!-- Scaninformationen -->\n          <div style=\"margin-top:19px;padding-top:13px;border-top:1px solid #e2e8f0;\n            font-size:11px;color:#64748b;line-height:1.8;\">\n            <strong>Scaninformationen</strong><br>\n            Hoststatus: ${esc(asset.host_status || 'Unbekannt')}<br>\n            Scan erfolgreich: ${asset.scan_success === true ? 'Ja' : 'Nein / unbekannt'}<br>\n            Scanzeitpunkt: ${formatDate(asset.scan_time)}\n          </div>\n\n        </td>\n      </tr>\n    </table>\n  `;\n}).join('');\n\n// --------------------------------------------------\n// HTML-Dashboard\n// --------------------------------------------------\n\nconst html = `\n<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>IT Security Report</title>\n</head>\n\n<body style=\"margin:0;padding:0;background:#eef2f7;\n  font-family:Arial,Helvetica,sans-serif;color:#1e293b;\">\n\n<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n  style=\"background:#eef2f7;padding:24px 10px;\">\n<tr>\n<td align=\"center\">\n\n<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n  style=\"max-width:780px;\">\n\n  <!-- Header -->\n  <tr>\n    <td style=\"background:#111827;padding:30px 26px;\n      border-radius:12px 12px 0 0;\">\n\n      <div style=\"font-size:10px;letter-spacing:2px;\n        color:#93c5fd;font-weight:bold;\">\n        SECURITY MONITORING\n      </div>\n\n      <div style=\"font-size:27px;font-weight:bold;\n        color:#ffffff;margin-top:9px;\">\n        IT Security Report\n      </div>\n\n      <div style=\"font-size:12px;color:#cbd5e1;margin-top:8px;\">\n        Automatisierte Infrastruktur- und Schwachstellenanalyse\n      </div>\n\n      <div style=\"font-size:11px;color:#94a3b8;margin-top:16px;\">\n        ${esc(generatedAt)}\n      </div>\n    </td>\n  </tr>\n\n  <!-- Dashboard -->\n  <tr>\n    <td style=\"background:#f8fafc;padding:22px 18px;\">\n\n      <!-- Gesamtstatus -->\n      <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n        style=\"background:#ffffff;border:1px solid #e2e8f0;\n        border-left:5px solid ${overallColor};border-radius:9px;\">\n        <tr>\n          <td style=\"padding:17px 18px;\">\n            <div style=\"font-size:10px;color:#64748b;\n              letter-spacing:1px;font-weight:bold;\">\n              GESAMTBEWERTUNG\n            </div>\n            <div style=\"font-size:20px;font-weight:bold;\n              color:${overallColor};margin-top:6px;\">\n              ${overallText}\n            </div>\n            <div style=\"font-size:12px;color:#64748b;margin-top:5px;\">\n              ${count.assets} überwachte Assets analysiert\n            </div>\n          </td>\n        </tr>\n      </table>\n\n      <!-- Risiko-Kennzahlen -->\n      <div style=\"font-size:14px;font-weight:bold;color:#0f172a;\n        margin:23px 0 8px;\">\n        Sicherheitslage\n      </div>\n\n      <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n        <tr>\n          ${metricCard(count.high, 'Hohes Risiko', colors.HIGH)}\n          ${metricCard(count.medium, 'Mittleres Risiko', colors.MEDIUM)}\n          ${metricCard(count.low, 'Niedriges Risiko', colors.LOW)}\n          ${metricCard(count.assets, 'Assets gesamt', '#0f172a')}\n        </tr>\n      </table>\n\n      <!-- Weitere Kennzahlen -->\n      <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n        style=\"margin-top:8px;\">\n        <tr>\n          ${metricCard(count.possibleCves, 'Mögliche CVE-Treffer', '#b45309')}\n          ${metricCard(count.kev, 'KEV-Kandidaten', '#dc2626')}\n          ${metricCard(count.unexpectedPorts, 'Unerwartete Ports', '#dc2626')}\n          ${metricCard(count.confirmedCves, 'Bestätigte CVEs', '#16a34a')}\n        </tr>\n      </table>\n\n      <!-- Asset-Übersicht -->\n      <div style=\"font-size:15px;font-weight:bold;color:#0f172a;\n        margin:27px 0 11px;\">\n        Asset-Übersicht\n      </div>\n\n      <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n        style=\"background:#ffffff;border:1px solid #e2e8f0;\n        border-radius:9px;border-collapse:collapse;font-size:11px;\">\n\n        <tr style=\"background:#f1f5f9;text-align:left;\">\n          <th style=\"padding:11px 10px;\">Asset</th>\n          <th style=\"padding:11px 5px;text-align:center;\">Risiko</th>\n          <th style=\"padding:11px 5px;text-align:center;\">CVE</th>\n          <th style=\"padding:11px 5px;text-align:center;\">KEV</th>\n          <th style=\"padding:11px 5px;text-align:center;\">Ports</th>\n        </tr>\n\n        ${assetOverview || `\n          <tr><td colspan=\"5\" style=\"padding:15px;color:#64748b;\">\n            Keine Assets vorhanden.\n          </td></tr>\n        `}\n      </table>\n\n      <!-- Detailbereich -->\n      <div style=\"font-size:15px;font-weight:bold;color:#0f172a;\n        margin:29px 0 0;\">\n        Detaillierte Asset-Analyse\n      </div>\n\n      ${assetDetails}\n\n      <!-- Bewertungshinweise -->\n      <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n        style=\"margin-top:25px;background:#ffffff;\n        border:1px solid #e2e8f0;border-radius:9px;\">\n        <tr>\n          <td style=\"padding:17px 18px;\">\n\n            <div style=\"font-size:12px;font-weight:bold;color:#334155;\">\n              Hinweise zur Interpretation\n            </div>\n\n            <div style=\"font-size:11px;line-height:1.7;\n              color:#64748b;margin-top:9px;\">\n\n              <strong>Risiko:</strong>\n              Die Risikostufe ist eine automatisierte Bewertung der gefundenen Hinweise.\n              Sie ersetzt keine manuelle Sicherheitsprüfung.<br>\n\n              <strong>CVE-Korrelation:</strong>\n              Mögliche Treffer sind keine bestätigten Schwachstellen.\n              Produkt, Version und betroffene Konfiguration müssen geprüft werden.<br>\n\n              <strong>KEV:</strong>\n              Ein KEV-Kandidat ist ein Treffer im Kontext des CISA-Katalogs.\n              Die tatsächliche Betroffenheit des Assets muss separat verifiziert werden.<br>\n\n              <strong>Unerwartete Ports:</strong>\n              Ports, die Nmap gefunden hat, die aber nicht in der Asset-Konfiguration\n              freigegeben wurden.<br>\n\n              <strong>Fehlende Ports:</strong>\n              Erwartete Ports, die Nmap nicht gefunden hat. Das ist zunächst eine\n              Verfügbarkeits- oder Konfigurationsabweichung und nicht automatisch\n              ein Sicherheitsrisiko.<br>\n\n              <strong>Shodan:</strong>\n              Abweichungen zwischen Shodan und Nmap können durch unterschiedliche\n              Scanzeitpunkte, Filter oder Erreichbarkeit entstehen.\n            </div>\n          </td>\n        </tr>\n      </table>\n\n    </td>\n  </tr>\n\n  <!-- Footer -->\n  <tr>\n    <td style=\"background:#111827;padding:19px 15px;\n      text-align:center;border-radius:0 0 12px 12px;\">\n\n      <div style=\"font-size:11px;color:#cbd5e1;\">\n        Automatisch erstellt durch n8n IT Security Monitoring\n      </div>\n\n      <div style=\"font-size:10px;color:#64748b;margin-top:6px;\">\n        Vertraulicher Infrastruktur-Sicherheitsbericht\n      </div>\n    </td>\n  </tr>\n\n</table>\n</td>\n</tr>\n</table>\n\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    subject: `IT Security Dashboard | ${count.high} hoch · ${count.medium} mittel · ${count.low} niedrig`,\n    html\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4496,
+        160
+      ],
+      "id": "7000fc8e-5970-46d8-994c-acc4990e1beb",
+      "name": "Generate HTML Report"
+    },
+    {
+      "parameters": {
+        "fromEmail": "cve@phil27.de",
+        "toEmail": "philipdittmar@t-online.de",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        4800,
+        160
+      ],
+      "id": "9976f598-72cf-4b72-99bb-c4bbf8640dbb",
+      "name": "Send an Email",
+      "webhookId": "fec034b6-5c70-4c3a-a650-b6390c739c2d",
+      "credentials": {
+        "smtp": {
+          "id": "PTT0Q0efPdiLeARV",
+          "name": "phil27.de-smtp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -368,
+        -16
+      ],
+      "id": "ba95e049-5488-4beb-85b4-a2dfe978f2ea",
+      "name": "Schedule Trigger",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        4272,
+        336
+      ],
+      "id": "cf141b62-64d6-4174-99c5-ba117d0669b8",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const error = $input.first().json;\n\nconst workflow = error.workflow || {};\nconst execution = error.execution || {};\nconst details = error.execution?.error || error.error || {};\n\nconst esc = value => String(value ?? 'Unbekannt')\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;')\n  .replace(/\"/g, '&quot;');\n\nconst workflowName = workflow.name || 'Unbekannter Workflow';\nconst workflowId = workflow.id || 'Unbekannt';\nconst executionId = execution.id || 'Unbekannt';\nconst errorMessage = details.message || 'Keine Fehlerbeschreibung verfügbar';\nconst errorNode = details.node?.name || 'Unbekannt';\nconst timestamp = new Date().toLocaleString('de-DE', {\n  timeZone: 'Europe/Berlin'\n});\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\"></head>\n<body style=\"font-family:Arial,sans-serif;background:#f3f4f6;padding:20px;color:#1f2937\">\n<div style=\"max-width:700px;margin:auto;background:white;padding:25px\">\n\n<h1 style=\"color:#dc2626\">IT Security – Workflow-Fehler</h1>\n\n<p>Ein Workflow konnte nicht erfolgreich ausgeführt werden.</p>\n\n<table width=\"100%\" cellpadding=\"10\" style=\"border-collapse:collapse\">\n<tr style=\"background:#f3f4f6\">\n<td><b>Workflow</b></td>\n<td>${esc(workflowName)}</td>\n</tr>\n<tr>\n<td><b>Workflow-ID</b></td>\n<td>${esc(workflowId)}</td>\n</tr>\n<tr style=\"background:#f3f4f6\">\n<td><b>Execution-ID</b></td>\n<td>${esc(executionId)}</td>\n</tr>\n<tr>\n<td><b>Fehlerhafter Node</b></td>\n<td>${esc(errorNode)}</td>\n</tr>\n<tr style=\"background:#f3f4f6\">\n<td><b>Zeitpunkt</b></td>\n<td>${esc(timestamp)}</td>\n</tr>\n</table>\n\n<h2 style=\"color:#dc2626\">Fehlerbeschreibung</h2>\n\n<div style=\"background:#fee2e2;padding:15px;border-left:4px solid #dc2626\">\n${esc(errorMessage)}\n</div>\n\n<p style=\"margin-top:25px;color:#64748b;font-size:12px\">\nAutomatische Benachrichtigung durch n8n IT Security Monitoring.\n</p>\n\n</div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    subject: `⚠️ n8n Fehler: ${workflowName}`,\n    html,\n    workflowName,\n    executionId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4496,
+        336
+      ],
+      "id": "5024b9a9-51cd-41b8-b7bf-9b5f0f420ca4",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://172.18.0.7:8080/scan",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ip\": \"{{ $json.ip }}\"\n}",
+        "options": {
+          "timeout": 960000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        160,
+        208
+      ],
+      "id": "2e5f7008-396d-4d60-b315-d943b0640635",
+      "name": "nmap-scan",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "ip",
+              "field2": "ip"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1008,
+        192
+      ],
+      "id": "36c6f2ae-e469-45d7-8eff-febe2e928dec",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn items.map(item => {\n  const data = item.json;\n\n  const unique = values => [\n    ...new Set(values.map(Number).filter(Number.isFinite))\n  ];\n\n  const nmapPorts = unique(\n    (data.open_ports || [])\n      .filter(p => p.protocol === 'tcp')\n      .map(p => p.port)\n  );\n\n  const shodanPorts = unique(data.observed_ports || []);\n  const expectedPorts = unique(data.expected_ports || []);\n\n  const sortPorts = ports => ports.sort((a, b) => a - b);\n\n  const common = nmapPorts.filter(p => shodanPorts.includes(p));\n  const onlyNmap = nmapPorts.filter(p => !shodanPorts.includes(p));\n  const onlyShodan = shodanPorts.filter(p => !nmapPorts.includes(p));\n\n  // Maßgeblich sind ausschließlich die bewusst freigegebenen Ports.\n  const unexpectedNmap = nmapPorts.filter(\n    p => !expectedPorts.includes(p)\n  );\n\n  const missingExpected = expectedPorts.filter(\n    p => !nmapPorts.includes(p)\n  );\n\n  return {\n    json: {\n      ...data,\n\n      nmap_ports: sortPorts(nmapPorts),\n\n      port_comparison: {\n        common: sortPorts(common),\n        only_nmap: sortPorts(onlyNmap),\n        only_shodan: sortPorts(onlyShodan),\n        unexpected_nmap: sortPorts(unexpectedNmap),\n        missing_expected: sortPorts(missingExpected)\n      }\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        192
+      ],
+      "id": "61a9ac59-b0b7-403f-8204-1802c9b9ec1b",
+      "name": "compare nmpa and shodan"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const data = item.json;\n  const comparison = data.port_comparison || {};\n\n  const findings = [];\n\n  // Unerwartete Ports aus der Portanalyse\n  const unexpectedPorts = [\n    ...new Set(comparison.unexpected_nmap || [])\n  ];\n\n  // Scanfehler nicht als OK bewerten\n  if (!data.scan_success) {\n    return {\n      json: {\n        ...data,\n        network_risk: \"UNKNOWN\",\n        unexpected_ports: [],\n        network_findings: [{\n          severity: \"WARNING\",\n          type: \"SCAN_FAILED\",\n          message: \"Nmap-Scan nicht erfolgreich\"\n        }]\n      }\n    };\n  }\n\n  // Unerwartete offene Ports\n  for (const port of unexpectedPorts) {\n    const service = (data.open_ports || [])\n      .find(p => p.port === port);\n\n    findings.push({\n      severity: \"WARNING\",\n      type: \"UNEXPECTED_PORT\",\n      port,\n      service: service?.service || \"unknown\",\n      product: service?.product || null,\n      version: service?.version || null,\n      message: `Unerwarteter offener TCP-Port ${port}`\n    });\n  }\n\n  // Abweichungen zu Shodan\n  if ((comparison.only_nmap || []).length > 0) {\n    findings.push({\n      severity: \"INFO\",\n      type: \"SHODAN_DIFFERENCE\",\n      ports: comparison.only_nmap,\n      message: \"Nmap findet zusätzliche Ports gegenüber Shodan\"\n    });\n  }\n\n  if ((comparison.only_shodan || []).length > 0) {\n    findings.push({\n      severity: \"INFO\",\n      type: \"SHODAN_DIFFERENCE\",\n      ports: comparison.only_shodan,\n      message: \"Shodan kennt Ports, die Nmap aktuell nicht findet\"\n    });\n  }\n\n  const networkRisk =\n    unexpectedPorts.length > 0 ? \"WARNING\" : \"OK\";\n\n  return {\n    json: {\n      ...data,\n\n      // Einheitliche Datenquelle\n      unexpected_ports: unexpectedPorts,\n\n      network_risk: networkRisk,\n      network_findings: findings\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        192
+      ],
+      "id": "242c38a8-cf4b-41c4-a9ec-216972c01792",
+      "name": "calculate network risk"
+    },
+    {
+      "parameters": {
+        "url": "https://services.nvd.nist.gov/rest/json/cves/2.0",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "cveId",
+              "value": "={{ $json.cve }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2816,
+        -96
+      ],
+      "id": "9b70f738-e626-4216-9be9-f30dbf47e666",
+      "name": "NVD Lookup",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3040,
+        -240
+      ],
+      "id": "d9dda996-6601-4510-afa6-1cdc275f7330",
+      "name": "Merge NVD"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nfunction parseCpe(cpe) {\n  if (!cpe || typeof cpe !== 'string') return null;\n\n  const parts = cpe.split(':');\n\n  // CPE 2.3: cpe:2.3:a:vendor:product:version:...\n  if (parts[1] === '2.3') {\n    return {\n      vendor: parts[3]?.toLowerCase(),\n      product: parts[4]?.toLowerCase(),\n      version: parts[5] || '*'\n    };\n  }\n\n  // CPE 2.2: cpe:/a:vendor:product:version\n  if (parts[1]?.startsWith('/')) {\n    return {\n      vendor: parts[2]?.toLowerCase(),\n      product: parts[3]?.toLowerCase(),\n      version: parts[4] || '*'\n    };\n  }\n\n  return null;\n}\n\n\n// Sammelt vulnerable CPE-Einträge aus der NVD-Antwort.\n// Achtung: AND / OR / negate werden hier noch nicht ausgewertet.\nfunction collectCpeMatches(obj, result = []) {\n  if (!obj || typeof obj !== 'object') return result;\n\n  if (Array.isArray(obj)) {\n    for (const entry of obj) {\n      collectCpeMatches(entry, result);\n    }\n    return result;\n  }\n\n  if (Array.isArray(obj.cpeMatch)) {\n    for (const match of obj.cpeMatch) {\n      if (match.vulnerable === true) {\n        result.push(match);\n      }\n    }\n  }\n\n  for (const value of Object.values(obj)) {\n    if (value && typeof value === 'object') {\n      collectCpeMatches(value, result);\n    }\n  }\n\n  return result;\n}\n\n\n// Vergleicht einfache numerische Versionsnummern.\n// Rückgabe: 1 = größer, -1 = kleiner, 0 = gleich, null = unbekannt.\nfunction compareVersions(a, b) {\n  if (!a || !b) return null;\n\n  if (\n    !/^\\d+(\\.\\d+)*$/.test(String(a)) ||\n    !/^\\d+(\\.\\d+)*$/.test(String(b))\n  ) {\n    return null;\n  }\n\n  const aa = String(a).split('.').map(Number);\n  const bb = String(b).split('.').map(Number);\n  const length = Math.max(aa.length, bb.length);\n\n  for (let i = 0; i < length; i++) {\n    const x = aa[i] ?? 0;\n    const y = bb[i] ?? 0;\n\n    if (x > y) return 1;\n    if (x < y) return -1;\n  }\n\n  return 0;\n}\n\n\n// Prüft, ob eine erkannte Version in den NVD-Versionsbereich fällt.\nfunction versionAffected(version, match) {\n  if (!version) return 'UNKNOWN';\n\n  const criteria = parseCpe(match.criteria);\n  if (!criteria) return 'UNKNOWN';\n\n  const fixedVersion = criteria.version;\n\n  // Exakte Version aus dem CPE\n  if (fixedVersion && fixedVersion !== '*') {\n    const comparison = compareVersions(version, fixedVersion);\n\n    if (comparison === null) return 'UNKNOWN';\n\n    return comparison === 0 ? 'AFFECTED' : 'NOT_AFFECTED';\n  }\n\n  // Untere Versionsgrenze\n  if (match.versionStartIncluding) {\n    const c = compareVersions(version, match.versionStartIncluding);\n\n    if (c === null) return 'UNKNOWN';\n    if (c < 0) return 'NOT_AFFECTED';\n  }\n\n  if (match.versionStartExcluding) {\n    const c = compareVersions(version, match.versionStartExcluding);\n\n    if (c === null) return 'UNKNOWN';\n    if (c <= 0) return 'NOT_AFFECTED';\n  }\n\n  // Obere Versionsgrenze\n  if (match.versionEndIncluding) {\n    const c = compareVersions(version, match.versionEndIncluding);\n\n    if (c === null) return 'UNKNOWN';\n    if (c > 0) return 'NOT_AFFECTED';\n  }\n\n  if (match.versionEndExcluding) {\n    const c = compareVersions(version, match.versionEndExcluding);\n\n    if (c === null) return 'UNKNOWN';\n    if (c >= 0) return 'NOT_AFFECTED';\n  }\n\n  return 'AFFECTED';\n}\n\n\n// Erkennt verwandte Produkte, ohne sie als identisch zu behandeln.\nfunction isRelatedProduct(detected, criteria) {\n  const vendor = (detected.vendor || '').toLowerCase();\n  const product = (detected.product || '').toLowerCase();\n\n  const nvdVendor = (criteria.vendor || '').toLowerCase();\n  const nvdProduct = (criteria.product || '').toLowerCase();\n\n  // OpenResty basiert auf nginx.\n  // Das ist ein Prüfhinweis, kein bestätigter Produktmatch.\n  if (\n    vendor === 'openresty' &&\n    product === 'ngx_openresty' &&\n    (\n      nvdProduct.includes('nginx') ||\n      nvdVendor === 'igor_sysoev'\n    )\n  ) {\n    return true;\n  }\n\n  return false;\n}\n\n\nreturn $input.all().map(item => {\n  const d = item.json;\n\n  const nvdCve = d.vulnerabilities?.[0]?.cve;\n  const configurations = nvdCve?.configurations || [];\n\n  const nvdMatches = collectCpeMatches(configurations);\n\n  // Erkannte Software aus Nmap normalisieren\n  const detected = (d.open_ports || []).flatMap(port => {\n    const cpes = Array.isArray(port.cpe)\n      ? port.cpe\n      : port.cpe\n        ? [port.cpe]\n        : [];\n\n    return cpes.map(cpe => {\n      const parsed = parseCpe(cpe);\n\n      return parsed ? {\n        ...parsed,\n        port: port.port,\n        detectedProduct: port.product,\n        detectedVersion: port.version\n      } : null;\n    }).filter(Boolean);\n  });\n\n  const findings = [];\n  const relatedProducts = [];\n\n  // Exakte Produktmatches prüfen\n  for (const match of nvdMatches) {\n    const criteria = parseCpe(match.criteria);\n\n    if (!criteria) continue;\n\n    const productMatches = detected.filter(found =>\n      found.vendor === criteria.vendor &&\n      found.product === criteria.product\n    );\n\n    for (const found of productMatches) {\n      const version = found.detectedVersion ||\n        (found.version !== '*' ? found.version : null);\n\n      findings.push({\n        vendor: criteria.vendor,\n        product: criteria.product,\n        detected_version: version,\n        port: found.port,\n        version_status: versionAffected(version, match)\n      });\n    }\n  }\n\n  // Verwandte Produkte separat erfassen\n  for (const match of nvdMatches) {\n    const criteria = parseCpe(match.criteria);\n\n    if (!criteria) continue;\n\n    const related = detected.filter(found =>\n      isRelatedProduct(found, criteria)\n    );\n\n    for (const found of related) {\n      relatedProducts.push({\n        nvd_vendor: criteria.vendor,\n        nvd_product: criteria.product,\n        detected_vendor: found.vendor,\n        detected_product: found.product,\n        detected_version: found.detectedVersion,\n        port: found.port,\n        status: 'MANUAL_REVIEW_REQUIRED'\n      });\n    }\n  }\n\n  // Doppelte Hinweise vermeiden\n  const uniqueRelatedProducts = [\n    ...new Map(\n      relatedProducts.map(entry => [\n        `${entry.nvd_vendor}:${entry.nvd_product}:${entry.port}`,\n        entry\n      ])\n    ).values()\n  ];\n\n  // Korrelationsstatus bestimmen\n  let correlationStatus = 'PRODUCT_NOT_OBSERVED';\n\n  if (!nvdCve) {\n    correlationStatus = 'NO_NVD_DATA';\n\n  } else if (\n    findings.some(f => f.version_status === 'AFFECTED')\n  ) {\n    correlationStatus = 'CPE_VERSION_MATCH';\n\n  } else if (\n    findings.some(f => f.version_status === 'UNKNOWN')\n  ) {\n    correlationStatus = 'PRODUCT_MATCH_VERSION_UNKNOWN';\n\n  } else if (\n    findings.some(f => f.version_status === 'NOT_AFFECTED')\n  ) {\n    correlationStatus = 'VERSION_NOT_AFFECTED';\n\n  } else if (uniqueRelatedProducts.length > 0) {\n    correlationStatus = 'RELATED_PRODUCT_REVIEW';\n  }\n\n  return {\n    json: {\n      ...d,\n      cve_correlation: {\n        status: correlationStatus,\n        detected_software: detected,\n        findings,\n        related_products: uniqueRelatedProducts,\n        nvd_found: !!nvdCve\n      }\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        -240
+      ],
+      "id": "47845cd5-25d8-4453-87ef-5593c9857e8b",
+      "name": "CVE Correlation"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s)": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "nmap-scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Test_CVE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test_CVE": {
+      "main": [
+        [
+          {
+            "node": "Analyze Security",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Security": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split CVEs": {
+      "main": [
+        [
+          {
+            "node": "Check CVEs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Check CVEs": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "CVE Risk Management",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CVE Risk Management": {
+      "main": [
+        [
+          {
+            "node": "NVD Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge NVD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate CVE Findings": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Calculate Asset Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Asset Risk": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "compare nmpa and shodan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "nmap-scan": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "compare nmpa and shodan": {
+      "main": [
+        [
+          {
+            "node": "Split CVEs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "calculate network risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "calculate network risk": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "NVD Lookup": {
+      "main": [
+        [
+          {
+            "node": "Merge NVD",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge NVD": {
+      "main": [
+        [
+          {
+            "node": "CVE Correlation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CVE Correlation": {
+      "main": [
+        [
+          {
+            "node": "Aggregate CVE Findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "timeSavedPerExecution": 25
+  },
+  "versionId": "f82fbf2e-7708-46ce-a228-5bba606d3013",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "26492fd0705754e5c1d003597ce6ae0965ef81d0515d8edc537ad0a92c2b9887"
+  },
+  "nodeGroups": [],
+  "id": "3EVTQYHsMK33KwRR",
+  "tags": []
+}
