@@ -246,6 +246,7 @@
         "rule": {
           "interval": [
             {
+              "daysInterval": 3,
               "triggerAtHour": 6
             }
           ]
@@ -378,6 +379,12 @@
           ]
         },
         "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 0,
+              "batchInterval": 5000
+            }
+          },
           "response": {
             "response": {
               "responseFormat": "json"
@@ -727,7 +734,7 @@
     "availableInMCP": false,
     "timeSavedPerExecution": 25
   },
-  "versionId": "dca2f86d-b62c-4571-8556-d594a7e523bb",
+  "versionId": "272e009e-a3d6-4893-891a-3751532d37cb",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "26492fd0705754e5c1d003597ce6ae0965ef81d0515d8edc537ad0a92c2b9887"
